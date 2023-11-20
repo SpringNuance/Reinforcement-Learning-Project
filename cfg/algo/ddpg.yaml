@@ -1,0 +1,8 @@
+seed: 0
+run_suffix: 0
+agent_name: ddpg
+gamma: 0.99
+lr: 3e-4
+tau: 0.005
+batch_size: 256
+buffer_size: 1e6

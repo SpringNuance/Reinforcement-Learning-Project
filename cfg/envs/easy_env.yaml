@@ -1,0 +1,28 @@
+exp_name: project
+env_name: SandingEnvEasy
+run_id: sanding-env-easy
+
+max_action : 1.0
+max_episode_steps: 20
+train_episodes: 10000
+test_episodes: 10
+min_update_samples: 2000
+
+testing: false
+model_path: default
+
+save_video: true
+save_logging: true
+save_model: true
+silent: false
+log_interval: 2000
+
+run_suffix: 0
+device: cpu
+
+env_config:
+  n_sanding: 1
+  n_no_sanding: 1
+  is_PD_control: True
+  radius: 10
+  render_mode: 'rgb_array'

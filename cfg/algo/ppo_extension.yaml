@@ -1,0 +1,9 @@
+
+batch_size: 64
+seed: null
+gamma: 0.98
+tau: 0.95
+clip: 0.2
+epochs: 12
+lr: 3e-4
+agent_name: ppo_extension
