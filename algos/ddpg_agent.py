@@ -19,8 +19,16 @@ class DDPGAgent(BaseAgent):
         self.action_dim = self.action_space_dim
         self.max_action = self.cfg.max_action
         self.lr=self.cfg.lr
-      
-        self.buffer = ReplayBuffer(state_shape=state_dim, action_dim=self.action_dim, max_size=self.cfg.buffer_size)
+
+        self.pi = Policy(state_dim, self.action_dim, self.max_action).to(self.device)
+        self.pi_target = copy.deepcopy(self.pi)
+        self.pi_optim = torch.optim.Adam(self.pi.parameters(), lr=float(self.lr))
+
+        self.q = Critic(state_dim, self.action_dim).to(self.device)
+        self.q_target = copy.deepcopy(self.q)
+        self.q_optim = torch.optim.Adam(self.q.parameters(), lr=float(self.lr))
+
+        self.buffer = ReplayBuffer(state_shape=[state_dim], action_dim=self.action_dim, max_size=int(float(self.cfg.buffer_size)))
         
         self.batch_size = self.cfg.batch_size
         self.gamma = self.cfg.gamma
@@ -36,15 +44,84 @@ class DDPGAgent(BaseAgent):
     def update(self,):
         """ After collecting one trajectory, update the pi and q for #transition times: """
         info = {}
-       
+        update_iter = self.buffer_ptr - self.buffer_head # update the network once per transition
+
+        if self.buffer_ptr > self.random_transition: # update once we have enough data
+            for _ in range(update_iter):
+                info = self._update()
+        
+        # update the buffer_head:
+        self.buffer_head = self.buffer_ptr
         return info
 
+    def _update(self,):
+        # get batch data
+        batch = self.buffer.sample(self.batch_size, device=self.device)
+        # batch contains:
+        #    state = batch.state, shape [batch, state_dim]
+        #    action = batch.action, shape [batch, action_dim]
+        #    next_state = batch.next_state, shape [batch, state_dim]
+        #    reward = batch.reward, shape [batch, 1]
+        #    not_done = batch.not_done, shape [batch, 1]
+
+        ########## Your code starts here. ##########
+        # Hints: 1. compute the Q target with the q_target and pi_target networks
+        #        2. compute the critic loss and update the q's parameters
+        #        3. compute actor loss and update the pi's parameters
+        #        4. update the target q and pi using u.soft_update_params() (See the DQN code)
+        # compute current q
+        q_current = self.q(batch.state, batch.action)
+        
+        # compute target q
+        q_target = batch.reward + self.gamma * self.q_target(batch.next_state, self.pi_target(batch.next_state)) * batch.not_done
+        
+        
+        # compute critic loss
+        critic_loss = torch.mean((q_current-q_target)**2)
+
+        # optimize the critic
+        self.q_optim.zero_grad()
+        critic_loss.backward()
+        self.q_optim.step()
+        
+        # compute actor loss
+        actor_loss = - torch.mean(self.q(batch.state, self.pi(batch.state)))
+
+        # optimize the actor
+        self.pi_optim.zero_grad()
+        actor_loss.backward()
+        self.pi_optim.step()
+
+        # update the target q and target pi using u.soft_update_params() function
+        cu.soft_update_params(self.q, self.q_target, self.tau)
+        cu.soft_update_params(self.pi, self.pi_target, self.tau)
+        ########## Your code ends here. ##########
 
 
-    
+        return {}
+
     @torch.no_grad()
     def get_action(self, observation, evaluation=False):
-       
+        if observation.ndim == 1: observation = observation[None] # add the batch dimension
+        x = torch.from_numpy(observation).float().to(self.device)
+
+        if self.buffer_ptr < self.random_transition and evaluation==False: # collect random trajectories for better exploration.
+            action = torch.rand(self.action_dim)
+        else:
+            expl_noise = 0.3 * self.max_action # the stddev of the expl_noise if not evaluation
+            
+            ########## Your code starts here. ##########
+            # Use the policy to calculate the action to execute
+            # if evaluation equals False, add normal noise to the action, where the std of the noise is expl_noise
+            # Hint: Make sure the returned action's shape is correct.
+            action = self.pi(x) # (batch_size, action_dim)
+            if evaluation == False:
+                noises = torch.normal(mean=0, std=expl_noise, size=action.size())
+                action = action + noises
+                action = action.clamp(-self.max_action, self.max_action)
+
+            ########## Your code ends here. ##########
+
         return action, {} # just return a positional value
 
         
@@ -129,10 +206,15 @@ class DDPGAgent(BaseAgent):
         print('------ Training Finished ------')
         print(f'Total traning time is {train_time}mins')
         
+    def record(self, state, action, next_state, reward, done):
+        """ Save transitions to the buffer. """
+        self.buffer_ptr += 1
+        self.buffer.add(state, action, next_state, reward, done)
+
     def load_model(self):
         # define the save path, do not modify
         filepath=str(self.model_dir)+'/model_parameters_'+str(self.seed)+'.pt'
-        
+        print(f'model loaded: {filepath}')
         d = torch.load(filepath)
         self.q.load_state_dict(d['q'])
         self.q_target.load_state_dict(d['q_target'])
