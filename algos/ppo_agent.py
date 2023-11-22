@@ -10,11 +10,7 @@ class PPOAgent(BaseAgent):
     def __init__(self, config=None):
         super(PPOAgent, self).__init__(config)
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
-<<<<<<< HEAD
-        self.policy = ...
-=======
         self.policy=Policy(state_space=self.observation_space_dim, action_space=self.action_space_dim, env=self.env)
->>>>>>> 944a333f5258d019c0fb0e8a209a4a62759d582c
         self.lr=self.cfg.lr
 
         self.batch_size = self.cfg.batch_size
@@ -32,11 +28,7 @@ class PPOAgent(BaseAgent):
         self.silent = self.cfg.silent
 
     def update_policy(self):
-<<<<<<< HEAD
-       ...
-=======
        return
->>>>>>> 944a333f5258d019c0fb0e8a209a4a62759d582c
 
 
     def get_action(self, observation, evaluation=False):
@@ -54,11 +46,7 @@ class PPOAgent(BaseAgent):
 
         while not done and episode_length < self.cfg.max_episode_steps:
             # Get action from the agent
-<<<<<<< HEAD
-            action = ...
-=======
             action, action_log_prob = self.get_action(observation)
->>>>>>> 944a333f5258d019c0fb0e8a209a4a62759d582c
             previous_observation = observation.copy()
 
             # Perform the action on the environment, get new state and reward

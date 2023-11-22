@@ -19,10 +19,6 @@ class DDPGAgent(BaseAgent):
         self.action_dim = self.action_space_dim
         self.max_action = self.cfg.max_action
         self.lr=self.cfg.lr
-<<<<<<< HEAD
-      
-        self.buffer = ...
-=======
 
         self.pi = Policy(state_dim, self.action_dim, self.max_action).to(self.device)
         self.pi_target = copy.deepcopy(self.pi)
@@ -33,7 +29,6 @@ class DDPGAgent(BaseAgent):
         self.q_optim = torch.optim.Adam(self.q.parameters(), lr=float(self.lr))
 
         self.buffer = ReplayBuffer(state_shape=[state_dim], action_dim=self.action_dim, max_size=int(float(self.cfg.buffer_size)))
->>>>>>> 944a333f5258d019c0fb0e8a209a4a62759d582c
         
         self.batch_size = self.cfg.batch_size
         self.gamma = self.cfg.gamma
@@ -107,9 +102,6 @@ class DDPGAgent(BaseAgent):
 
     @torch.no_grad()
     def get_action(self, observation, evaluation=False):
-<<<<<<< HEAD
-        action = ...
-=======
         if observation.ndim == 1: observation = observation[None] # add the batch dimension
         x = torch.from_numpy(observation).float().to(self.device)
 
@@ -130,7 +122,6 @@ class DDPGAgent(BaseAgent):
 
             ########## Your code ends here. ##########
 
->>>>>>> 944a333f5258d019c0fb0e8a209a4a62759d582c
         return action, {} # just return a positional value
 
         
@@ -141,13 +132,8 @@ class DDPGAgent(BaseAgent):
         # Reset the environment and observe the initial state
         obs, _ = self.env.reset()
         while not done:
-            
             # Sample action from policy
-<<<<<<< HEAD
-            action = ...
-=======
             action, act_logprob =self.get_action(obs)
->>>>>>> 944a333f5258d019c0fb0e8a209a4a62759d582c
 
             # Perform the action on the environment, get new state and reward
             next_obs, reward, done, _, _ = self.env.step(to_numpy(action))
