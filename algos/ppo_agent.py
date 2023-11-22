@@ -10,11 +10,7 @@ class PPOAgent(BaseAgent):
     def __init__(self, config=None):
         super(PPOAgent, self).__init__(config)
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
-<<<<<<< HEAD
-        self.policy = ...
-=======
-        self.policy=Policy(state_space=self.observation_space_dim, action_space=self.action_space_dim, env=self.env)
->>>>>>> 944a333f5258d019c0fb0e8a209a4a62759d582c
+        self.policy = Policy(self.observation_space_dim, self.action_space_dim, self.cfg.hidden_dim, self.device)
         self.lr=self.cfg.lr
 
         self.batch_size = self.cfg.batch_size
@@ -32,11 +28,47 @@ class PPOAgent(BaseAgent):
         self.silent = self.cfg.silent
 
     def update_policy(self):
-<<<<<<< HEAD
-       ...
-=======
-       return
->>>>>>> 944a333f5258d019c0fb0e8a209a4a62759d582c
+        # Convert lists to tensors
+        states = torch.tensor(self.states, dtype=torch.float32, device=self.device)
+        actions = torch.tensor(self.actions, dtype=torch.float32, device=self.device)
+        rewards = torch.tensor(self.rewards, dtype=torch.float32, device=self.device)
+        old_action_log_probs = torch.tensor(self.action_log_probs, dtype=torch.float32, device=self.device)
+        dones = torch.tensor(self.dones, dtype=torch.float32, device=self.device)
+
+        # Calculate returns and advantages
+        returns, advantages = self.calculate_advantages(rewards, dones)
+
+        # Normalize advantages
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
+
+        for _ in range(self.epochs):
+            # Get new log probabilities and state values
+            new_log_probs, state_values, entropy = self.policy.evaluate_actions(states, actions)
+
+            # Calculate the ratio (pi_theta / pi_theta__old)
+            ratios = torch.exp(new_log_probs - old_action_log_probs.detach())
+
+            # Calculate surrogate losses
+            surr1 = ratios * advantages
+            surr2 = torch.clamp(ratios, 1.0 - self.clip, 1.0 + self.clip) * advantages
+
+            # Calculate policy gradient loss
+            policy_loss = -torch.min(surr1, surr2).mean()
+
+            # Calculate value loss
+            value_loss = F.mse_loss(state_values.squeeze(), returns)
+
+            # Calculate the total loss
+            total_loss = policy_loss + 0.5 * value_loss - 0.01 * entropy.mean()
+
+            # Take gradient step
+            self.optimizer.zero_grad()
+            total_loss.backward()
+            self.optimizer.step()
+
+        # Clear the current trajectory
+        self.clear_trajectory()
+        return
 
 
     def get_action(self, observation, evaluation=False):
@@ -54,11 +86,8 @@ class PPOAgent(BaseAgent):
 
         while not done and episode_length < self.cfg.max_episode_steps:
             # Get action from the agent
-<<<<<<< HEAD
             action = ...
-=======
-            action, action_log_prob = self.get_action(observation)
->>>>>>> 944a333f5258d019c0fb0e8a209a4a62759d582c
+            action_log_prob = ...
             previous_observation = observation.copy()
 
             # Perform the action on the environment, get new state and reward
