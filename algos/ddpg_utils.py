@@ -38,9 +38,6 @@ class Critic(nn.Module):
 
 class ReplayBuffer(object):
     def __init__(self, state_shape:tuple, action_dim: int, max_size=int(1e6)):
-<<<<<<< Updated upstream
-        True
-=======
         self.max_size = max_size
         self.ptr = 0
         self.size = 0
@@ -108,4 +105,3 @@ class ReplayBuffer(object):
         )
         return batch
 
->>>>>>> Stashed changes
