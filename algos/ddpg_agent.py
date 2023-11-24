@@ -73,9 +73,11 @@ class DDPGAgent(BaseAgent):
         # compute current q
         q_current = self.q(batch.state, batch.action)
         
+        # next actions using target networks
+        next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
+
         # compute target q
-        q_target = batch.reward + self.gamma * self.q_target(batch.next_state, self.pi_target(batch.next_state)) * batch.not_done
-        
+        q_target = batch.reward + self.gamma * self.q_target(batch.next_state, next_actions_target) * batch.not_done
         
         # compute critic loss
         critic_loss = torch.mean((q_current-q_target)**2)
@@ -98,13 +100,15 @@ class DDPGAgent(BaseAgent):
         cu.soft_update_params(self.pi, self.pi_target, self.tau)
         ########## Your code ends here. ##########
 
-
         return {}
 
     @torch.no_grad()
     def get_action(self, observation, evaluation=False):
         if observation.ndim == 1: observation = observation[None] # add the batch dimension
-        x = torch.from_numpy(observation).float().to(self.device)
+        try:
+            x = torch.from_numpy(observation).float().to(self.device)
+        except:
+            x = observation
 
         if self.buffer_ptr < self.random_transition and evaluation==False: # collect random trajectories for better exploration.
             action = torch.rand(self.action_dim)
@@ -115,7 +119,7 @@ class DDPGAgent(BaseAgent):
             # Use the policy to calculate the action to execute
             # if evaluation equals False, add normal noise to the action, where the std of the noise is expl_noise
             # Hint: Make sure the returned action's shape is correct.
-            action = self.pi(x) # (batch_size, action_dim)
+            action = self.pi_target(x) # (batch_size, action_dim)
             if evaluation == False:
                 noises = torch.normal(mean=0, std=expl_noise, size=action.size())
                 action = action + noises
