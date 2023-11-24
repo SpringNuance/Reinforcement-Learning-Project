@@ -22,19 +22,28 @@ class Policy(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
         super().__init__()
         self.max_action = max_action
-        
+        self.actor = nn.Sequential(
+            nn.Linear(state_dim, 32), nn.ReLU(),
+            nn.Linear(32, 32), nn.ReLU(),
+            nn.Linear(32, action_dim)
+        )
 
     def forward(self, state):
-        return 
+        return self.max_action * torch.tanh(self.actor(state))
 
 
+# Critic class. The critic is represented by a neural network.
 class Critic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super().__init__()
-        True
+        self.value = nn.Sequential(
+            nn.Linear(state_dim+action_dim, 32), nn.ReLU(),
+            nn.Linear(32, 32), nn.ReLU(),
+            nn.Linear(32, 1))
 
     def forward(self, state, action):
-        return
+        x = torch.cat([state, action], 1)
+        return self.value(x) # output shape [batch, 1]
 
 class ReplayBuffer(object):
     def __init__(self, state_shape:tuple, action_dim: int, max_size=int(1e6)):
@@ -104,4 +113,3 @@ class ReplayBuffer(object):
             extra = extra
         )
         return batch
-

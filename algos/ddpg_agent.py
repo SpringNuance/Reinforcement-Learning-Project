@@ -21,6 +21,7 @@ class DDPGAgent(BaseAgent):
         self.lr=self.cfg.lr
 
         self.pi = Policy(state_dim, self.action_dim, self.max_action).to(self.device)
+
         self.pi_target = copy.deepcopy(self.pi)
         self.pi_optim = torch.optim.Adam(self.pi.parameters(), lr=float(self.lr))
 
@@ -214,119 +215,6 @@ class DDPGAgent(BaseAgent):
         # define the save path, do not modify
         filepath=str(self.model_dir)+'/model_parameters_'+str(self.seed)+'.pt'
         print(f'model loaded: {filepath}')
-        d = torch.load(filepath)
-        self.q.load_state_dict(d['q'])
-        self.q_target.load_state_dict(d['q_target'])
-        self.pi.load_state_dict(d['pi'])
-        self.pi_target.load_state_dict(d['pi_target'])
-    
-    def save_model(self):   
-        # define the save path, do not modify
-        filepath=str(self.model_dir)+'/model_parameters_'+str(self.seed)+'.pt'
-        
-        torch.save({
-            'q': self.q.state_dict(),
-            'q_target': self.q_target.state_dict(),
-            'pi': self.pi.state_dict(),
-            'pi_target': self.pi_target.state_dict()
-        }, filepath)
-        print("Saved model to", filepath, "...")
-
-
-
-
-    
-    @torch.no_grad()
-    def get_action(self, observation, evaluation=False):
-        action =...
-        return action, {} # just return a positional value
-
-        
-    def train_iteration(self):
-        #start = time.perf_counter()
-        # Run actual training        
-        reward_sum, timesteps, done = 0, 0, False
-        # Reset the environment and observe the initial state
-        obs, _ = self.env.reset()
-        while not done:
-            
-            # Sample action from policy
-            action = ...
-
-            # Perform the action on the environment, get new state and reward
-            next_obs, reward, done, _, _ = self.env.step(to_numpy(action))
-
-            # Store action's outcome (so that the agent can improve its policy)        
-            
-            done_bool = float(done) if timesteps < self.max_episode_steps else 0 
-            self.record(obs, action, next_obs, reward, done_bool)
-                
-            # Store total episode reward
-            reward_sum += reward
-            timesteps += 1
-            
-            if timesteps >= self.max_episode_steps:
-                done = True
-            # update observation
-            obs = next_obs.copy()
-
-        # update the policy after one episode
-        #s = time.perf_counter()
-        info = self.update()
-        #e = time.perf_counter()
-        
-        # Return stats of training
-        info.update({
-                    'episode_length': timesteps,
-                    'ep_reward': reward_sum,
-                    })
-        
-        end = time.perf_counter()
-        return info
-        
-    def train(self):
-        if self.cfg.save_logging:
-            L = cu.Logger() # create a simple logger to record stats
-        start = time.perf_counter()
-        total_step=0
-        run_episode_reward=[]
-        log_count=0
-        
-        for ep in range(self.cfg.train_episodes + 1):
-            # collect data and update the policy
-            train_info = self.train_iteration()
-            train_info.update({'episodes': ep})
-            total_step+=train_info['episode_length']
-            train_info.update({'total_step': total_step})
-            run_episode_reward.append(train_info['ep_reward'])
-            
-            if total_step>self.cfg.log_interval*log_count:
-                average_return=sum(run_episode_reward)/len(run_episode_reward)
-                if not self.cfg.silent:
-                    print(f"Episode {ep} Step {total_step} finished. Average episode return: {average_return}")
-                if self.cfg.save_logging:
-                    train_info.update({'average_return':average_return})
-                    L.log(**train_info)
-                run_episode_reward=[]
-                log_count+=1
-
-        if self.cfg.save_model:
-            self.save_model()
-            
-        logging_path = str(self.logging_dir)+'/logs'   
-        if self.cfg.save_logging:
-            L.save(logging_path, self.seed)
-        self.env.close()
-
-        end = time.perf_counter()
-        train_time = (end-start)/60
-        print('------ Training Finished ------')
-        print(f'Total traning time is {train_time}mins')
-        
-    def load_model(self):
-        # define the save path, do not modify
-        filepath=str(self.model_dir)+'/model_parameters_'+str(self.seed)+'.pt'
-        
         d = torch.load(filepath)
         self.q.load_state_dict(d['q'])
         self.q_target.load_state_dict(d['q_target'])
