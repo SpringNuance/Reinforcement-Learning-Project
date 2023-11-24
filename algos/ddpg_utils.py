@@ -22,37 +22,33 @@ class Policy(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
         super().__init__()
         self.max_action = max_action
-        self.actor = nn.Sequential(
-            nn.Linear(state_dim, 32), nn.ReLU(),
-            nn.Linear(32, 32), nn.ReLU(),
-            nn.Linear(32, action_dim)
-        )
+        
 
     def forward(self, state):
-        return self.max_action * torch.tanh(self.actor(state))
+        return 
+
 
 class Critic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super().__init__()
-        self.value = nn.Sequential(
-            nn.Linear(state_dim+action_dim, 32), nn.ReLU(),
-            nn.Linear(32, 32), nn.ReLU(),
-            nn.Linear(32, 1))
+        True
 
     def forward(self, state, action):
-        x = torch.cat([state, action], 1)
-        return self.value(x) # output shape [batch, 1]
+        return
 
 class ReplayBuffer(object):
     def __init__(self, state_shape:tuple, action_dim: int, max_size=int(1e6)):
+<<<<<<< Updated upstream
+        True
+=======
         self.max_size = max_size
         self.ptr = 0
         self.size = 0
 
         dtype = torch.uint8 if len(state_shape) == 3 else torch.float32 # unit8 is used to store images
-        self.state = torch.zeros((max_size, *state_shape), dtype=dtype)
+        self.state = torch.zeros((max_size, state_shape[0]), dtype=dtype)
         self.action = torch.zeros((max_size, action_dim), dtype=dtype)
-        self.next_state = torch.zeros((max_size, *state_shape), dtype=dtype)
+        self.next_state = torch.zeros((max_size, state_shape[0]), dtype=dtype)
         self.reward = torch.zeros((max_size, 1), dtype=dtype)
         self.not_done = torch.zeros((max_size, 1), dtype=dtype)
         self.extra = {}
@@ -111,3 +107,5 @@ class ReplayBuffer(object):
             extra = extra
         )
         return batch
+
+>>>>>>> Stashed changes
