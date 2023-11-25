@@ -1,5 +1,5 @@
 from .agent_base import BaseAgent
-from .ddpg_utils import Policy, Critic, ReplayBuffer
+from .ddpg_utils import Policy, Critic, ReplayBuffer, OrnsteinUhlenbeckProcess
 from .ddpg_agent import DDPGAgent
 
 import utils.common_utils as cu
@@ -36,6 +36,7 @@ class DDPGExtension(DDPGAgent):
 
         self.buffer = ReplayBuffer(state_shape=[state_dim], action_dim=self.action_dim, max_size=int(float(self.cfg.buffer_size)))
         
+        self.ou_process = OrnsteinUhlenbeckProcess(size=self.action_dim)
         self.batch_size = self.cfg.batch_size
         self.gamma = self.cfg.gamma
         self.tau = self.cfg.tau
@@ -131,7 +132,8 @@ class DDPGExtension(DDPGAgent):
         if self.buffer_ptr < self.random_transition and evaluation==False: # collect random trajectories for better exploration.
             action = torch.rand(self.action_dim)
         else:
-            expl_noise = 0.3 * self.max_action # the stddev of the expl_noise if not evaluation
+            # expl_noise = 0.3 * self.max_action # the stddev of the expl_noise if not evaluation
+            ou_noise = torch.tensor(self.ou_process.sample()).to(self.device)
             
             ########## Your code starts here. ##########
             # Use the policy to calculate the action to execute
@@ -139,8 +141,10 @@ class DDPGExtension(DDPGAgent):
             # Hint: Make sure the returned action's shape is correct.
             action = self.pi_target(x) # (batch_size, action_dim)
             if evaluation == False:
-                noises = torch.normal(mean=0, std=expl_noise, size=action.size())
-                action = action + noises
+                # noises = torch.normal(mean=0, std=expl_noise, size=action.size())
+                # action = action + noises
+
+                action = action + ou_noise
                 action = action.clamp(-self.max_action, self.max_action)
 
             ########## Your code ends here. ##########
