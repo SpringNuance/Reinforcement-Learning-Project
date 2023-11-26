@@ -45,6 +45,19 @@ class Critic(nn.Module):
         x = torch.cat([state, action], 1)
         return self.value(x) # output shape [batch, 1]
 
+# Critic class. The critic is represented by a neural network.
+class CriticQR(nn.Module):
+    def __init__(self, state_dim, action_dim, N=100):
+        super().__init__()
+        self.value = nn.Sequential(
+            nn.Linear(state_dim+action_dim, 32), nn.ReLU(),
+            nn.Linear(32, 32), nn.ReLU(),
+            nn.Linear(32, N))
+
+    def forward(self, state, action):
+        x = torch.cat([state, action], 1)
+        return self.value(x) # output shape [batch, N]
+
 class ReplayBuffer(object):
     def __init__(self, state_shape:tuple, action_dim: int, max_size=int(1e6)):
         self.max_size = max_size
