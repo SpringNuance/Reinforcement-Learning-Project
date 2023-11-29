@@ -1,3 +1,4 @@
+
 from .agent_base import BaseAgent
 from .ddpg_utils import Policy, Critic, ReplayBuffer, OrnsteinUhlenbeckProcess, CriticQR
 from .ddpg_agent import DDPGAgent
@@ -22,27 +23,25 @@ class DDPGExtension(DDPGAgent):
         self.action_dim = self.action_space_dim
         self.max_action = self.cfg.max_action
         self.lr=self.cfg.lr
-
+        self.N = 50
         self.pi = Policy(state_dim, self.action_dim, self.max_action).to(self.device)
+
         self.pi_target = copy.deepcopy(self.pi)
         self.pi_optim = torch.optim.Adam(self.pi.parameters(), lr=float(self.lr))
 
-        self.q1 = Critic(state_dim, self.action_dim).to(self.device)
-        self.q1_target = copy.deepcopy(self.q1)
-        self.q1_optim = torch.optim.Adam(self.q1.parameters(), lr=float(self.lr))
-
-        self.q2 = Critic(state_dim, self.action_dim).to(self.device)
-        self.q2_target = copy.deepcopy(self.q2)
-        self.q2_optim = torch.optim.Adam(self.q2.parameters(), lr=float(self.lr))
+        self.q = CriticQR(state_dim, self.action_dim, N=self.N).to(self.device)
+        self.q_target = copy.deepcopy(self.q)
+        self.q_optim = torch.optim.Adam(self.q.parameters(), lr=float(self.lr))
 
         self.buffer = ReplayBuffer(state_shape=[state_dim], action_dim=self.action_dim, max_size=int(float(self.cfg.buffer_size)))
         
-        # self.ou_process = OrnsteinUhlenbeckProcess(size=self.action_dim)
+        # self.huber_loss = HuberLoss(delta=0.2, reduction='none')
+        self.kappa = 0.3
         self.batch_size = self.cfg.batch_size
         self.gamma = self.cfg.gamma
         self.tau = self.cfg.tau
-        self.iteration_count = 0
-
+        self.iter_count = 0
+        self.noise_decay = 0.99
         # used to count number of transitions in a trajectory
         self.buffer_ptr = 0
         self.buffer_head = 0 
@@ -62,6 +61,31 @@ class DDPGExtension(DDPGAgent):
         # update the buffer_head:
         self.buffer_head = self.buffer_ptr
         return info
+    
+    def custom_huber_loss(self, pred, target):
+            error = target - pred
+            print('error:', error)
+            kappa_tensor = torch.full_like(error, self.kappa)
+            quadratic_term = torch.min(torch.abs(error), kappa_tensor)
+            linear_term = torch.abs(error) - quadratic_term
+            loss = 0.5 * quadratic_term**2 + self.kappa * linear_term
+            return loss
+    
+    def quantile_huber_loss(self, target, pred, N=100):
+        """
+        - target: [batch_size, N]
+        - pred: [batch_size, N]
+        - tau: quantile
+        """
+        
+        batch_size = target.size()[0]
+        u = target - pred # [batch_size, N]
+        tau_mat = torch.arange(0.5/N, (N+0.5)/N, 1/N).to(self.device) # quantile range [0.5/N -> (N-0.5)/N]  shape: [N]
+        tau_mat = tau_mat.unsqueeze(0).repeat(batch_size, 1) # shape: [batch_size, N]
+        huber_loss = self.custom_huber_loss(pred, target)   # [batch_size, N]
+        quantile_huber_loss = torch.abs(tau_mat - (u < 0).float()) * huber_loss  # [batch_size, N]
+        return torch.mean(quantile_huber_loss)
+
 
     def _update(self,):
         # get batch data
@@ -79,45 +103,36 @@ class DDPGExtension(DDPGAgent):
         #        3. compute actor loss and update the pi's parameters
         #        4. update the target q and pi using u.soft_update_params() (See the DQN code)
         
+        self.iter_count += 1
         # compute current q
-        q1_current = self.q1(batch.state, batch.action)
-        q2_current = self.q2(batch.state, batch.action)
+        q_current = self.q(batch.state, batch.action) # (batch_size, N)
         
         # next actions using target networks
         next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
 
         # compute target q
-        q1_target = batch.reward + self.gamma * self.q1_target(batch.next_state, next_actions_target) * batch.not_done
-        q2_target = batch.reward + self.gamma * self.q2_target(batch.next_state, next_actions_target) * batch.not_done
-        y = torch.min(q1_target, q2_target)
+        q_target_next_state = self.q_target(batch.next_state, next_actions_target) # q_target(s_t+1, pi_target(s_t+1)) [batch_size, N]
+        q_target = batch.reward + self.gamma * q_target_next_state * batch.not_done
         
         # compute critic loss
-        critic1_loss = torch.mean((y-q1_current)**2)
-        critic2_loss = torch.mean((y-q2_current)**2)
+        critic_loss = self.quantile_huber_loss(target=q_target, pred=q_current, N=self.N)
 
         # optimize the critic
-        self.q1_optim.zero_grad()
-        self.q2_optim.zero_grad()
-        critic1_loss.backward(retain_graph=True)
-        critic2_loss.backward()
-        self.q1_optim.step()
-        self.q2_optim.step()
+        self.q_optim.zero_grad()
+        critic_loss.backward()
+        self.q_optim.step()
         
-        if self.iteration_count % 2 == 0:
-            # compute actor loss
-            actor_loss = - torch.mean(self.q1(batch.state, self.pi(batch.state)))
+        # compute actor loss
+        actor_loss = - torch.mean(self.q(batch.state, self.pi(batch.state)))
 
-            # optimize the actor
-            self.pi_optim.zero_grad()
-            actor_loss.backward()
-            self.pi_optim.step()
+        # optimize the actor
+        self.pi_optim.zero_grad()
+        actor_loss.backward()
+        self.pi_optim.step()
 
-            # update the target q and target pi using u.soft_update_params() function
-            cu.soft_update_params(self.q1, self.q1_target, self.tau)
-            cu.soft_update_params(self.q2, self.q2_target, self.tau)
-            cu.soft_update_params(self.pi, self.pi_target, self.tau)
-        
-        self.iteration_count += 1
+        # update the target q and target pi using u.soft_update_params() function
+        cu.soft_update_params(self.q, self.q_target, self.tau)
+        cu.soft_update_params(self.pi, self.pi_target, self.tau)
         ########## Your code ends here. ##########
 
         return {}
@@ -133,8 +148,7 @@ class DDPGExtension(DDPGAgent):
         if self.buffer_ptr < self.random_transition and evaluation==False: # collect random trajectories for better exploration.
             action = torch.rand(self.action_dim)
         else:
-            expl_noise = 0.3 * self.max_action # the stddev of the expl_noise if not evaluation
-            # ou_noise = torch.tensor(self.ou_process.sample()).to(self.device)
+            expl_noise = self.noise_decay**(self.iter_count//100) * 0.1 * self.max_action # the stddev of the expl_noise if not evaluation
             
             ########## Your code starts here. ##########
             # Use the policy to calculate the action to execute
@@ -144,8 +158,6 @@ class DDPGExtension(DDPGAgent):
             if evaluation == False:
                 noises = torch.normal(mean=0, std=expl_noise, size=action.size())
                 action = action + noises
-
-                # action = action + ou_noise
                 action = action.clamp(-self.max_action, self.max_action)
 
             ########## Your code ends here. ##########
@@ -243,10 +255,8 @@ class DDPGExtension(DDPGAgent):
         filepath=str(self.model_dir)+'/model_parameters_'+str(self.seed)+'.pt'
         print(f'model loaded: {filepath}')
         d = torch.load(filepath)
-        self.q1.load_state_dict(d['q1'])
-        self.q1_target.load_state_dict(d['q1_target'])
-        self.q2.load_state_dict(d['q2'])
-        self.q2_target.load_state_dict(d['q2_target'])
+        self.q.load_state_dict(d['q'])
+        self.q_target.load_state_dict(d['q_target'])
         self.pi.load_state_dict(d['pi'])
         self.pi_target.load_state_dict(d['pi_target'])
     
@@ -255,12 +265,9 @@ class DDPGExtension(DDPGAgent):
         filepath=str(self.model_dir)+'/model_parameters_'+str(self.seed)+'.pt'
         
         torch.save({
-            'q1': self.q1.state_dict(),
-            'q1_target': self.q1_target.state_dict(),
-            'q2': self.q2.state_dict(),
-            'q2_target': self.q2_target.state_dict(),
+            'q': self.q.state_dict(),
+            'q_target': self.q_target.state_dict(),
             'pi': self.pi.state_dict(),
             'pi_target': self.pi_target.state_dict()
         }, filepath)
         print("Saved model to", filepath, "...")
-

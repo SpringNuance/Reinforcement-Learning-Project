@@ -25,7 +25,7 @@ class Policy(nn.Module):
         self.actor = nn.Sequential(
             nn.Linear(state_dim, 32), nn.ReLU(),
             nn.Linear(32, 32), nn.ReLU(),
-            nn.Linear(32, action_dim)
+            nn.Linear(32, action_dim), nn.Tanh()
         )
 
     def forward(self, state):
@@ -51,6 +51,8 @@ class CriticQR(nn.Module):
         super().__init__()
         self.value = nn.Sequential(
             nn.Linear(state_dim+action_dim, 32), nn.ReLU(),
+            nn.Linear(32, 32), nn.ReLU(),
+            nn.Linear(32, 32), nn.ReLU(),
             nn.Linear(32, 32), nn.ReLU(),
             nn.Linear(32, N))
 
