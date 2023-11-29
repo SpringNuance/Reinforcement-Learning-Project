@@ -45,6 +45,19 @@ class Critic(nn.Module):
         x = torch.cat([state, action], 1)
         return self.value(x) # output shape [batch, 1]
 
+class CriticTD3(nn.Module):
+    def __init__(self, state_dim, action_dim):
+        super().__init__()
+        self.value = nn.Sequential(
+            nn.Linear(state_dim+action_dim, 32), nn.ReLU(),
+            nn.Linear(32, 32), nn.ReLU(),
+            nn.Linear(32, 1), nn.Tanh()
+        )
+
+    def forward(self, state, action):
+        x = torch.cat([state, action], 1)
+        return self.value(x) # output shape [batch, 1]
+
 # Critic class. The critic is represented by a neural network.
 class CriticQR(nn.Module):
     def __init__(self, state_dim, action_dim, N=100):

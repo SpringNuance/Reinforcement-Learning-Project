@@ -74,7 +74,8 @@ class DDPGAgent(BaseAgent):
         q_current = self.q(batch.state, batch.action)
         
         # next actions using target networks
-        next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
+        # next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
+        next_actions_target = self.pi_target(batch.next_state)
 
         # compute target q
         q_target = batch.reward + self.gamma * self.q_target(batch.next_state, next_actions_target) * batch.not_done

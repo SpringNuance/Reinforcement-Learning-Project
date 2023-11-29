@@ -108,11 +108,13 @@ class DDPGExtension(DDPGAgent):
         q_current = self.q(batch.state, batch.action) # (batch_size, N)
         
         # next actions using target networks
-        next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
+        # next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
+        next_actions_target = self.pi_target(batch.next_state) # (batch_size, action_dim)
 
         # compute target q
         q_target_next_state = self.q_target(batch.next_state, next_actions_target) # q_target(s_t+1, pi_target(s_t+1)) [batch_size, N]
         q_target = batch.reward + self.gamma * q_target_next_state * batch.not_done
+        q_target = q_target.detach()
         
         # compute critic loss
         critic_loss = self.quantile_huber_loss(target=q_target, pred=q_current, N=self.N)

@@ -129,7 +129,6 @@ def get_statistical_plots_data(path, seeds, env_name, algo_name):
     
 
 def plot_algorithm_training(path, seeds, env_name, algo_name):
-    
 
      # Calculate mean and std across different runs
     steps, mean_average_return, std_average_return = get_statistical_plots_data(path, seeds, env_name, algo_name)

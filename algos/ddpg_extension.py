@@ -84,12 +84,13 @@ class DDPGExtension(DDPGAgent):
         q2_current = self.q2(batch.state, batch.action)
         
         # next actions using target networks
-        next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
+        # next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
+        next_actions_target = self.pi_target(batch.next_state)
 
         # compute target q
         q1_target = batch.reward + self.gamma * self.q1_target(batch.next_state, next_actions_target) * batch.not_done
         q2_target = batch.reward + self.gamma * self.q2_target(batch.next_state, next_actions_target) * batch.not_done
-        y = torch.min(q1_target, q2_target)
+        y = torch.min(q1_target, q2_target).detach()
         
         # compute critic loss
         critic1_loss = torch.mean((y-q1_current)**2)
@@ -98,7 +99,7 @@ class DDPGExtension(DDPGAgent):
         # optimize the critic
         self.q1_optim.zero_grad()
         self.q2_optim.zero_grad()
-        critic1_loss.backward(retain_graph=True)
+        critic1_loss.backward()
         critic2_loss.backward()
         self.q1_optim.step()
         self.q2_optim.step()
