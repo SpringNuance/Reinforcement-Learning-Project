@@ -73,6 +73,28 @@ class CriticQR(nn.Module):
         x = torch.cat([state, action], 1)
         return self.value(x) # output shape [batch, N]
 
+class PotentialFunction(nn.Module):
+    def __init__(self, env):
+        super().__init__()
+        self.n_sanding = env.n_sanding
+        self.n_no_sanding = env.n_no_sanding
+    def forward(self, state):
+        """
+            - state: agent state [batch_size, state_dim]
+            A state \( s \) is defined as:
+
+        s = [(xRobot, yRobot), (xSand, ySand)1, (xSand, ySand)2, ..., (xSand, ySand)N, (xNoSand, yNoSand)1, (xNoSand, yNoSand)2, ..., (xNoSand, yNoSand)M)]
+
+        where (xRobot, yRobot) is the robot position and (xSand, ySand) is the sand position and (xNoSand, yNoSand) is the no sand position.
+            return potential_value [batch_size, 1]
+        """
+        distance_to_sand = torch.norm(state[:, :2] - state[:, 2:2+self.n_sanding], dim=1)    # shape [batch_size, n_sanding]
+        distance_to_nosand = torch.norm(state[:, :2] - state[:, 2+self.n_sanding:], dim=1)   # shape [batch_size, n_no_sanding]
+        avg_distance_to_sand = torch.mean(distance_to_sand, dim=1)                     # shape [batch_size, 1]
+        avg_distance_to_nosand = torch.mean(distance_to_nosand, dim=1)                 # shape [batch_size, 1]
+        potential_value = avg_distance_to_nosand - avg_distance_to_sand                # shape [batch_size, 1]
+        return potential_value
+
 class ReplayBuffer(object):
     def __init__(self, state_shape:tuple, action_dim: int, max_size=int(1e6)):
         self.max_size = max_size

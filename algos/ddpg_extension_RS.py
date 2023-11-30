@@ -1,5 +1,6 @@
 from .agent_base import BaseAgent
-from .ddpg_utils import Policy, Critic, ReplayBuffer
+from .ddpg_utils import Policy, Critic, ReplayBuffer, PotentialFunction
+from .ddpg_agent import DDPGAgent
 import utils.common_utils as cu
 import torch
 import numpy as np
@@ -10,15 +11,17 @@ from pathlib import Path
 def to_numpy(tensor):
     return tensor.cpu().numpy().flatten()
 
-class DDPGAgent(BaseAgent):
+class DDPGExtension(DDPGAgent):
     def __init__(self, config=None):
         super(DDPGAgent, self).__init__(config)
+        print("Yess, potential function is used!")
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
         self.name = 'ddpg'
         state_dim = self.observation_space_dim
         self.action_dim = self.action_space_dim
         self.max_action = self.cfg.max_action
         self.lr=self.cfg.lr
+        self.potential_function = PotentialFunction(self.env).to(self.device)
 
         self.pi = Policy(state_dim, self.action_dim, self.max_action).to(self.device)
 
@@ -70,6 +73,14 @@ class DDPGAgent(BaseAgent):
         #        2. compute the critic loss and update the q's parameters
         #        3. compute actor loss and update the pi's parameters
         #        4. update the target q and pi using u.soft_update_params() (See the DQN code)
+        
+        # state potential
+        state_potential = self.potential_function(batch.state)
+
+        # next state potential
+        next_state_potential = self.potential_function(batch.next_state)
+        shaping_reward = self.gamma * next_state_potential - state_potential
+
         # compute current q
         q_current = self.q(batch.state, batch.action)
         
@@ -78,9 +89,9 @@ class DDPGAgent(BaseAgent):
         next_actions_target = self.pi_target(batch.next_state)
 
         # compute target q
-        q_target = batch.reward + self.gamma * self.q_target(batch.next_state, next_actions_target) * batch.not_done
+        q_target = batch.reward + self.gamma * self.q_target(batch.next_state, next_actions_target) * batch.not_done + shaping_reward
         q_target = q_target.detach()
-        
+
         # compute critic loss
         critic_loss = torch.mean((q_current-q_target)**2)
 
