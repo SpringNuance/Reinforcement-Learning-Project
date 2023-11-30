@@ -1,5 +1,5 @@
 from .agent_base import BaseAgent
-from .ddpg_utils import Policy, Critic, ReplayBuffer, PotentialFunction
+from .ddpg_utils import Policy, Critic, PrioritizedReplayBuffer
 from .ddpg_agent import DDPGAgent
 import utils.common_utils as cu
 import torch
@@ -14,13 +14,13 @@ def to_numpy(tensor):
 class DDPGExtension(DDPGAgent):
     def __init__(self, config=None):
         super(DDPGAgent, self).__init__(config)
+        print('DDPG extension PER is used')
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
         self.name = 'ddpg'
         state_dim = self.observation_space_dim
         self.action_dim = self.action_space_dim
         self.max_action = self.cfg.max_action
         self.lr=self.cfg.lr
-        self.potential_function = PotentialFunction(self.env).to(self.device)
 
         self.pi = Policy(state_dim, self.action_dim, self.max_action).to(self.device)
 
@@ -31,7 +31,11 @@ class DDPGExtension(DDPGAgent):
         self.q_target = copy.deepcopy(self.q)
         self.q_optim = torch.optim.Adam(self.q.parameters(), lr=float(self.lr))
 
-        self.buffer = ReplayBuffer(state_shape=[state_dim], action_dim=self.action_dim, max_size=int(float(self.cfg.buffer_size)))
+        self.buffer = PrioritizedReplayBuffer(state_shape=[state_dim],
+                                                action_dim=self.action_dim, 
+                                                max_size=int(float(self.cfg.buffer_size)),
+                                                alpha=0.4,
+                                                beta=0.4)
         
         self.batch_size = self.cfg.batch_size
         self.gamma = self.cfg.gamma
@@ -59,7 +63,7 @@ class DDPGExtension(DDPGAgent):
 
     def _update(self,):
         # get batch data
-        batch = self.buffer.sample(self.batch_size, device=self.device)
+        ind, batch, weights = self.buffer.sample(self.batch_size, device=self.device)
         # batch contains:
         #    state = batch.state, shape [batch, state_dim]
         #    action = batch.action, shape [batch, action_dim]
@@ -72,32 +76,22 @@ class DDPGExtension(DDPGAgent):
         #        2. compute the critic loss and update the q's parameters
         #        3. compute actor loss and update the pi's parameters
         #        4. update the target q and pi using u.soft_update_params() (See the DQN code)
-        
-        # state potential
-        state_potential = self.potential_function(batch.state)
-
-        # next state potential
-        next_state_potential = self.potential_function(batch.next_state)
-        shaping_reward = self.gamma * next_state_potential - state_potential
-        # print('shaping_reward', shaping_reward)
-
         # compute current q
         q_current = self.q(batch.state, batch.action)
-
+        
         # next actions using target networks
         # next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
         next_actions_target = self.pi_target(batch.next_state)
 
         # compute target q
         q_target = batch.reward + self.gamma * self.q_target(batch.next_state, next_actions_target) * batch.not_done
-        # print('q_target', q_target)
-        # print('q_target - q_current', q_target - q_current)
-        # print('q_target - q_current mean', torch.mean(q_target - q_current))
-        q_target = q_target + shaping_reward.reshape(-1, 1)
         q_target = q_target.detach()
         
+        # Update priorities
+        self.buffer.update_priorities(ind, (q_current-q_target).abs().detach().cpu())
+
         # compute critic loss
-        critic_loss = torch.mean((q_current-q_target)**2)
+        critic_loss = torch.sum(weights * (q_current-q_target)**2)
 
         # optimize the critic
         self.q_optim.zero_grad()
@@ -163,7 +157,7 @@ class DDPGExtension(DDPGAgent):
             # Store action's outcome (so that the agent can improve its policy)        
             
             done_bool = float(done) if timesteps < self.max_episode_steps else 0 
-            self.record(obs, action, next_obs, reward, done_bool)
+            self.record(obs, action, next_obs, reward, done_bool, timestep=timesteps)
                 
             # Store total episode reward
             reward_sum += reward
@@ -227,10 +221,10 @@ class DDPGExtension(DDPGAgent):
         print('------ Training Finished ------')
         print(f'Total traning time is {train_time}mins')
         
-    def record(self, state, action, next_state, reward, done):
+    def record(self, state, action, next_state, reward, done, timestep):
         """ Save transitions to the buffer. """
         self.buffer_ptr += 1
-        self.buffer.add(state, action, next_state, reward, done)
+        self.buffer.add(state, action, next_state, reward, done, timestep)
 
     def load_model(self):
         # define the save path, do not modify

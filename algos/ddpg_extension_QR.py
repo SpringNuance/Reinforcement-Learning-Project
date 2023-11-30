@@ -36,7 +36,7 @@ class DDPGExtension(DDPGAgent):
         self.buffer = ReplayBuffer(state_shape=[state_dim], action_dim=self.action_dim, max_size=int(float(self.cfg.buffer_size)))
         
         # self.huber_loss = HuberLoss(delta=0.2, reduction='none')
-        self.kappa = 0.3
+        self.kappa = 0.05
         self.batch_size = self.cfg.batch_size
         self.gamma = self.cfg.gamma
         self.tau = self.cfg.tau
@@ -64,7 +64,6 @@ class DDPGExtension(DDPGAgent):
     
     def custom_huber_loss(self, pred, target):
             error = target - pred
-            print('error:', error)
             kappa_tensor = torch.full_like(error, self.kappa)
             quadratic_term = torch.min(torch.abs(error), kappa_tensor)
             linear_term = torch.abs(error) - quadratic_term
@@ -118,7 +117,7 @@ class DDPGExtension(DDPGAgent):
         
         # compute critic loss
         critic_loss = self.quantile_huber_loss(target=q_target, pred=q_current, N=self.N)
-
+        
         # optimize the critic
         self.q_optim.zero_grad()
         critic_loss.backward()

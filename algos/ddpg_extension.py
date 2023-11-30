@@ -15,8 +15,17 @@ def to_numpy(tensor):
 
 class DDPGExtension(DDPGAgent):
     def __init__(self, config=None):
+        try:
+            if config["seed"] is not None:
+                torch.manual_seed(config["seed"])
+                np.random.seed(config["seed"])
+        except:
+            pass
+
         super(DDPGAgent, self).__init__(config)
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
+        # self.device = "mps"
+        # print(f'using {self.device}')
         self.name = 'ddpg_extension'
         state_dim = self.observation_space_dim
         self.action_dim = self.action_space_dim
@@ -134,7 +143,7 @@ class DDPGExtension(DDPGAgent):
         if self.buffer_ptr < self.random_transition and evaluation==False: # collect random trajectories for better exploration.
             action = torch.rand(self.action_dim)
         else:
-            expl_noise = 0.3 * self.max_action # the stddev of the expl_noise if not evaluation
+            expl_noise = 0.3 # the stddev of the expl_noise if not evaluation
             # ou_noise = torch.tensor(self.ou_process.sample()).to(self.device)
             
             ########## Your code starts here. ##########
@@ -143,7 +152,7 @@ class DDPGExtension(DDPGAgent):
             # Hint: Make sure the returned action's shape is correct.
             action = self.pi_target(x) # (batch_size, action_dim)
             if evaluation == False:
-                noises = torch.normal(mean=0, std=expl_noise, size=action.size())
+                noises = torch.normal(mean=0, std=expl_noise, size=action.size()).to(self.device)
                 action = action + noises
 
                 # action = action + ou_noise
