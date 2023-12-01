@@ -16,8 +16,8 @@ class PPOAgent(BaseAgent):
         self.action_dim = self.action_space_dim
         self.max_action = self.cfg.max_action
 
-        self.policy = Policy(self.state_dim, self.action_dim).to(self.device)
-        
+        self.policy = Policy(self.state_dim, self.action_dim, self.max_action).to(self.device)
+        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
         self.lr=self.cfg.lr
         self.name = 'ppo'
 
@@ -77,6 +77,23 @@ class PPOAgent(BaseAgent):
             # Drop the batch indices
             indices = [i for i in indices if i not in batch_indices]
 
+    def compute_returns(self):
+        returns = []
+        with torch.no_grad():
+            _, values = self.policy(self.states)
+            _, next_values = self.policy(self.next_states)
+            values = values.squeeze()
+            next_values = next_values.squeeze()
+        gaes = torch.zeros(1)
+        timesteps = len(self.rewards)
+        for t in range(timesteps-1, -1, -1):
+            deltas = self.rewards[t] + self.gamma * next_values[t] *\
+                     (1-self.dones[t]) - values[t]
+            gaes = deltas + self.gamma*self.tau*(1-self.dones[t])*gaes
+            returns.append(gaes + values[t])
+
+        return torch.Tensor(list(reversed(returns)))
+    
     def ppo_update(self, states, actions, rewards, next_states, dones, old_log_probs, targets):
         action_dists, values = self.policy(states)
         values = values.squeeze()
@@ -108,7 +125,14 @@ class PPOAgent(BaseAgent):
         else:
             action = action_dist.sample()
         aprob = action_dist.log_prob(action)
-        action = action.item()
+        #print(type(action))
+        #print(action)
+        action = action.clamp(-self.max_action, self.max_action)
+        # action = action.item()
+        action = action.flatten()
+        #print(action)
+        #print(type(action))
+        #print(action.shape)
         return action, aprob
 
     def train_iteration(self,ratio_of_episodes):
@@ -192,7 +216,8 @@ class PPOAgent(BaseAgent):
 
     def store_outcome(self, state, action, next_state, reward, action_log_prob, done):
         self.states.append(torch.from_numpy(state).float())
-        self.actions.append(torch.Tensor([action]))
+        # self.actions.append(torch.Tensor([action]))
+        self.actions.append(action)
         self.action_log_probs.append(action_log_prob.detach())
         self.rewards.append(torch.Tensor([reward]).float())
         self.dones.append(torch.Tensor([done]))

@@ -25,7 +25,7 @@ class Policy(nn.Module):
         self.actor = nn.Sequential(
             nn.Linear(state_dim, 32), nn.ReLU(),
             nn.Linear(32, 32), nn.ReLU(),
-            nn.Linear(32, action_dim), nn.Tanh()
+            nn.Linear(32, action_dim)
         )
 
     def forward(self, state):
