@@ -20,7 +20,7 @@ class DDPGAgent(BaseAgent):
             pass
         super(DDPGAgent, self).__init__(config)
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
-        self.device = "mps"
+        # self.device = "mps"
         self.name = 'ddpg'
         state_dim = self.observation_space_dim
         self.action_dim = self.action_space_dim

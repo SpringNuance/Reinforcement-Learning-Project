@@ -51,7 +51,7 @@ class CriticTD3(nn.Module):
         self.value = nn.Sequential(
             nn.Linear(state_dim+action_dim, 32), nn.ReLU(),
             nn.Linear(32, 32), nn.ReLU(),
-            nn.Linear(32, 1), nn.Tanh()
+            nn.Linear(32, 1)
         )
 
     def forward(self, state, action):
@@ -64,8 +64,6 @@ class CriticQR(nn.Module):
         super().__init__()
         self.value = nn.Sequential(
             nn.Linear(state_dim+action_dim, 32), nn.ReLU(),
-            nn.Linear(32, 32), nn.ReLU(),
-            nn.Linear(32, 32), nn.ReLU(),
             nn.Linear(32, 32), nn.ReLU(),
             nn.Linear(32, N))
 
@@ -269,7 +267,19 @@ class PrioritizedReplayBuffer(object):
         )
         return batch
 
+class DynamicModel(nn.Module):
+    def __init__(self, state_dim, action_dim):
+        super().__init__()
+        self.model = nn.Sequential(
+            nn.Linear(state_dim+action_dim, 32), nn.ReLU(),
+            nn.Linear(32, 32), nn.ReLU(),
+            nn.Linear(32, state_dim+1)
+        )
 
+    def forward(self, state, action):
+        x = torch.cat([state, action], 1)
+        return self.model(x) # output shape [batch, state_dim]
+    
 class OrnsteinUhlenbeckProcess:
     def __init__(self, size, mu=0, theta=0.15, sigma=0.2):
         self.size = size

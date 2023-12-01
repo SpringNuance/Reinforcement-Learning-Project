@@ -146,10 +146,6 @@ class DDPGExtension(DDPGAgent):
             expl_noise = 0.3 # the stddev of the expl_noise if not evaluation
             # ou_noise = torch.tensor(self.ou_process.sample()).to(self.device)
             
-            ########## Your code starts here. ##########
-            # Use the policy to calculate the action to execute
-            # if evaluation equals False, add normal noise to the action, where the std of the noise is expl_noise
-            # Hint: Make sure the returned action's shape is correct.
             action = self.pi_target(x) # (batch_size, action_dim)
             if evaluation == False:
                 noises = torch.normal(mean=0, std=expl_noise, size=action.size()).to(self.device)

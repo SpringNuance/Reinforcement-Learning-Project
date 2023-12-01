@@ -16,6 +16,13 @@ def to_numpy(tensor):
 
 class DDPGExtension(DDPGAgent):
     def __init__(self, config=None):
+        try:
+            if config["seed"] is not None:
+                torch.manual_seed(config["seed"])
+                np.random.seed(config["seed"])
+        except:
+            pass
+        
         super(DDPGAgent, self).__init__(config)
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
         self.name = 'ddpg_extension'
@@ -23,7 +30,7 @@ class DDPGExtension(DDPGAgent):
         self.action_dim = self.action_space_dim
         self.max_action = self.cfg.max_action
         self.lr=self.cfg.lr
-        self.N = 50
+        self.N = 16
         self.pi = Policy(state_dim, self.action_dim, self.max_action).to(self.device)
 
         self.pi_target = copy.deepcopy(self.pi)
@@ -36,7 +43,7 @@ class DDPGExtension(DDPGAgent):
         self.buffer = ReplayBuffer(state_shape=[state_dim], action_dim=self.action_dim, max_size=int(float(self.cfg.buffer_size)))
         
         # self.huber_loss = HuberLoss(delta=0.2, reduction='none')
-        self.kappa = 0.05
+        self.kappa = 1
         self.batch_size = self.cfg.batch_size
         self.gamma = self.cfg.gamma
         self.tau = self.cfg.tau

@@ -13,6 +13,12 @@ def to_numpy(tensor):
 
 class DDPGExtension(DDPGAgent):
     def __init__(self, config=None):
+        try:
+            if config["seed"] is not None:
+                torch.manual_seed(config["seed"])
+                np.random.seed(config["seed"])
+        except:
+            pass
         super(DDPGAgent, self).__init__(config)
         print('DDPG extension PER is used')
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
@@ -124,7 +130,7 @@ class DDPGExtension(DDPGAgent):
         if self.buffer_ptr < self.random_transition and evaluation==False: # collect random trajectories for better exploration.
             action = torch.rand(self.action_dim)
         else:
-            expl_noise = 0.3 * self.max_action # the stddev of the expl_noise if not evaluation
+            expl_noise = 0.3 # the stddev of the expl_noise if not evaluation
             
             ########## Your code starts here. ##########
             # Use the policy to calculate the action to execute
@@ -132,7 +138,7 @@ class DDPGExtension(DDPGAgent):
             # Hint: Make sure the returned action's shape is correct.
             action = self.pi_target(x) # (batch_size, action_dim)
             if evaluation == False:
-                noises = torch.normal(mean=0, std=expl_noise, size=action.size())
+                noises = torch.normal(mean=0, std=expl_noise, size=action.size()).to(self.device)
                 action = action + noises
                 action = action.clamp(-self.max_action, self.max_action)
 
