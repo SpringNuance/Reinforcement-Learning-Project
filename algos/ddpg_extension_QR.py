@@ -16,6 +16,13 @@ def to_numpy(tensor):
 
 class DDPGExtension(DDPGAgent):
     def __init__(self, config=None):
+        try:
+            if config["seed"] is not None:
+                torch.manual_seed(config["seed"])
+                np.random.seed(config["seed"])
+        except:
+            pass
+        
         super(DDPGAgent, self).__init__(config)
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
         self.name = 'ddpg_extension'
@@ -23,7 +30,7 @@ class DDPGExtension(DDPGAgent):
         self.action_dim = self.action_space_dim
         self.max_action = self.cfg.max_action
         self.lr=self.cfg.lr
-        self.N = 50
+        self.N = 16
         self.pi = Policy(state_dim, self.action_dim, self.max_action).to(self.device)
 
         self.pi_target = copy.deepcopy(self.pi)
@@ -36,7 +43,7 @@ class DDPGExtension(DDPGAgent):
         self.buffer = ReplayBuffer(state_shape=[state_dim], action_dim=self.action_dim, max_size=int(float(self.cfg.buffer_size)))
         
         # self.huber_loss = HuberLoss(delta=0.2, reduction='none')
-        self.kappa = 0.3
+        self.kappa = 1
         self.batch_size = self.cfg.batch_size
         self.gamma = self.cfg.gamma
         self.tau = self.cfg.tau
@@ -64,7 +71,6 @@ class DDPGExtension(DDPGAgent):
     
     def custom_huber_loss(self, pred, target):
             error = target - pred
-            print('error:', error)
             kappa_tensor = torch.full_like(error, self.kappa)
             quadratic_term = torch.min(torch.abs(error), kappa_tensor)
             linear_term = torch.abs(error) - quadratic_term
@@ -108,15 +114,17 @@ class DDPGExtension(DDPGAgent):
         q_current = self.q(batch.state, batch.action) # (batch_size, N)
         
         # next actions using target networks
-        next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
+        # next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
+        next_actions_target = self.pi_target(batch.next_state) # (batch_size, action_dim)
 
         # compute target q
         q_target_next_state = self.q_target(batch.next_state, next_actions_target) # q_target(s_t+1, pi_target(s_t+1)) [batch_size, N]
         q_target = batch.reward + self.gamma * q_target_next_state * batch.not_done
+        q_target = q_target.detach()
         
         # compute critic loss
         critic_loss = self.quantile_huber_loss(target=q_target, pred=q_current, N=self.N)
-
+        
         # optimize the critic
         self.q_optim.zero_grad()
         critic_loss.backward()

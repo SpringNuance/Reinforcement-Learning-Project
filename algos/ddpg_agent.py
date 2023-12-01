@@ -12,8 +12,15 @@ def to_numpy(tensor):
 
 class DDPGAgent(BaseAgent):
     def __init__(self, config=None):
+        try:
+            if config["seed"] is not None:
+                torch.manual_seed(config["seed"])
+                np.random.seed(config["seed"])
+        except:
+            pass
         super(DDPGAgent, self).__init__(config)
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
+        # self.device = "mps"
         self.name = 'ddpg'
         self.state_dim = self.observation_space_dim
         self.action_dim = self.action_space_dim
@@ -74,11 +81,13 @@ class DDPGAgent(BaseAgent):
         q_current = self.q(batch.state, batch.action)
         
         # next actions using target networks
-        next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
+        # next_actions_target, _ = self.get_action(batch.next_state, evaluation=True)
+        next_actions_target = self.pi_target(batch.next_state)
 
         # compute target q
         q_target = batch.reward + self.gamma * self.q_target(batch.next_state, next_actions_target) * batch.not_done
-        
+        q_target = q_target.detach()
+
         # compute critic loss
         critic_loss = torch.mean((q_current-q_target)**2)
 
@@ -113,7 +122,7 @@ class DDPGAgent(BaseAgent):
         if self.buffer_ptr < self.random_transition and evaluation==False: # collect random trajectories for better exploration.
             action = torch.rand(self.action_dim)
         else:
-            expl_noise = 0.3 * self.max_action # the stddev of the expl_noise if not evaluation
+            expl_noise = 0.3 # the stddev of the expl_noise if not evaluation
             
             ########## Your code starts here. ##########
             # Use the policy to calculate the action to execute
@@ -121,7 +130,7 @@ class DDPGAgent(BaseAgent):
             # Hint: Make sure the returned action's shape is correct.
             action = self.pi_target(x) # (batch_size, action_dim)
             if evaluation == False:
-                noises = torch.normal(mean=0, std=expl_noise, size=action.size())
+                noises = torch.normal(mean=0, std=expl_noise, size=action.size()).to(self.device)
                 action = action + noises
                 action = action.clamp(-self.max_action, self.max_action)
 
