@@ -6,12 +6,20 @@ import numpy as np
 import torch.nn.functional as F
 import time
 
+
 class PPOAgent(BaseAgent):
     def __init__(self, config=None):
         super(PPOAgent, self).__init__(config)
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
-        self.policy = Policy(self.observation_space_dim, self.action_space_dim, self.cfg.hidden_dim, self.device)
+
+        self.state_dim = self.observation_space_dim
+        self.action_dim = self.action_space_dim
+        #self.max_action = self.cfg.max_action
+
+        self.policy = Policy(self.state_dim, self.action_dim).to(self.device)
+        
         self.lr=self.cfg.lr
+        self.name = 'ppo'
 
         self.batch_size = self.cfg.batch_size
         self.gamma = self.cfg.gamma
@@ -70,12 +78,17 @@ class PPOAgent(BaseAgent):
         self.clear_trajectory()
         return
 
-
     def get_action(self, observation, evaluation=False):
-        return
+        x = torch.from_numpy(observation).float().to(self.train_device)
+        action_dist, _ = self.policy.forward(x)
+        if evaluation:
+            action = action_dist.probs.argmax()
+        else:
+            action = action_dist.sample()
+        aprob = action_dist.log_prob(action)
+        action = action.item()
+        return action, aprob
 
-
-        
     def train_iteration(self,ratio_of_episodes):
         # Run actual training        
         reward_sum, episode_length, num_updates = 0, 0, 0
@@ -86,8 +99,7 @@ class PPOAgent(BaseAgent):
 
         while not done and episode_length < self.cfg.max_episode_steps:
             # Get action from the agent
-            action = ...
-            action_log_prob = ...
+            action, action_log_prob = self.get_action(observation)
             previous_observation = observation.copy()
 
             # Perform the action on the environment, get new state and reward
@@ -113,7 +125,9 @@ class PPOAgent(BaseAgent):
         update_info = {'episode_length': episode_length,
                     'ep_reward': reward_sum}
         return update_info
-        
+
+
+
     def train(self):
         if self.cfg.save_logging: 
             L = cu.Logger() # create a simple logger to record stats
@@ -154,7 +168,15 @@ class PPOAgent(BaseAgent):
         train_time = (end-start)/60
         print("------Training finished.------")
         print(f'Total traning time is {train_time}mins')
-    
+
+    def store_outcome(self, state, action, next_state, reward, action_log_prob, done):
+        self.states.append(torch.from_numpy(state).float())
+        self.actions.append(torch.Tensor([action]))
+        self.action_log_probs.append(action_log_prob.detach())
+        self.rewards.append(torch.Tensor([reward]).float())
+        self.dones.append(torch.Tensor([done]))
+        self.next_states.append(torch.from_numpy(next_state).float())
+        
     def load_model(self):
         filepath=str(self.model_dir)+'/model_parameters_'+str(self.seed)+'.pt'
         state_dict = torch.load(filepath)

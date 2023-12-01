@@ -15,21 +15,21 @@ class DDPGAgent(BaseAgent):
         super(DDPGAgent, self).__init__(config)
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
         self.name = 'ddpg'
-        state_dim = self.observation_space_dim
+        self.state_dim = self.observation_space_dim
         self.action_dim = self.action_space_dim
         self.max_action = self.cfg.max_action
         self.lr=self.cfg.lr
 
-        self.pi = Policy(state_dim, self.action_dim, self.max_action).to(self.device)
+        self.pi = Policy(self.state_dim, self.action_dim, self.max_action).to(self.device)
 
         self.pi_target = copy.deepcopy(self.pi)
         self.pi_optim = torch.optim.Adam(self.pi.parameters(), lr=float(self.lr))
 
-        self.q = Critic(state_dim, self.action_dim).to(self.device)
+        self.q = Critic(self.state_dim, self.action_dim).to(self.device)
         self.q_target = copy.deepcopy(self.q)
         self.q_optim = torch.optim.Adam(self.q.parameters(), lr=float(self.lr))
 
-        self.buffer = ReplayBuffer(state_shape=[state_dim], action_dim=self.action_dim, max_size=int(float(self.cfg.buffer_size)))
+        self.buffer = ReplayBuffer(state_shape=[self.state_dim], action_dim=self.action_dim, max_size=int(float(self.cfg.buffer_size)))
         
         self.batch_size = self.cfg.batch_size
         self.gamma = self.cfg.gamma
