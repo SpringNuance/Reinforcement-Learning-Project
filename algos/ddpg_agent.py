@@ -145,6 +145,12 @@ class DDPGAgent(BaseAgent):
         reward_sum, timesteps, done = 0, 0, False
         # Reset the environment and observe the initial state
         obs, _ = self.env.reset()
+        # Change obs to np.float32
+        #  env reset function seems to create float64 state space, 
+        # whereas the gym expects float32. By changing self.state to np.float32 it is possible to 
+        # get rid of some warnings and also speedup a bit the training
+        obs = obs.astype(np.float32)
+
         while not done:
             # Sample action from policy
             action, act_logprob =self.get_action(obs)
@@ -165,6 +171,7 @@ class DDPGAgent(BaseAgent):
                 done = True
             # update observation
             obs = next_obs.copy()
+            obs = obs.astype(np.float32)
 
         # update the policy after one episode
         #s = time.perf_counter()

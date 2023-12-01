@@ -14,7 +14,7 @@ class PPOAgent(BaseAgent):
 
         self.state_dim = self.observation_space_dim
         self.action_dim = self.action_space_dim
-        #self.max_action = self.cfg.max_action
+        self.max_action = self.cfg.max_action
 
         self.policy = Policy(self.state_dim, self.action_dim).to(self.device)
         
@@ -36,47 +36,69 @@ class PPOAgent(BaseAgent):
         self.silent = self.cfg.silent
 
     def update_policy(self):
-        # Convert lists to tensors
-        states = torch.tensor(self.states, dtype=torch.float32, device=self.device)
-        actions = torch.tensor(self.actions, dtype=torch.float32, device=self.device)
-        rewards = torch.tensor(self.rewards, dtype=torch.float32, device=self.device)
-        old_action_log_probs = torch.tensor(self.action_log_probs, dtype=torch.float32, device=self.device)
-        dones = torch.tensor(self.dones, dtype=torch.float32, device=self.device)
+        if not self.silent:
+            print("Updating the policy...")
 
-        # Calculate returns and advantages
-        returns, advantages = self.calculate_advantages(rewards, dones)
+        self.states = torch.stack(self.states)
+        self.actions = torch.stack(self.actions).squeeze()
+        self.next_states = torch.stack(self.next_states)
+        self.rewards = torch.stack(self.rewards).squeeze()
+        self.dones = torch.stack(self.dones).squeeze()
+        self.action_log_probs = torch.stack(self.action_log_probs).squeeze()
 
-        # Normalize advantages
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
+        for e in range(self.epochs):
+            self.ppo_epoch()
 
-        for _ in range(self.epochs):
-            # Get new log probabilities and state values
-            new_log_probs, state_values, entropy = self.policy.evaluate_actions(states, actions)
-
-            # Calculate the ratio (pi_theta / pi_theta__old)
-            ratios = torch.exp(new_log_probs - old_action_log_probs.detach())
-
-            # Calculate surrogate losses
-            surr1 = ratios * advantages
-            surr2 = torch.clamp(ratios, 1.0 - self.clip, 1.0 + self.clip) * advantages
-
-            # Calculate policy gradient loss
-            policy_loss = -torch.min(surr1, surr2).mean()
-
-            # Calculate value loss
-            value_loss = F.mse_loss(state_values.squeeze(), returns)
-
-            # Calculate the total loss
-            total_loss = policy_loss + 0.5 * value_loss - 0.01 * entropy.mean()
-
-            # Take gradient step
-            self.optimizer.zero_grad()
-            total_loss.backward()
-            self.optimizer.step()
-
-        # Clear the current trajectory
-        self.clear_trajectory()
+        # Clear the replay buffer
+        self.states = []
+        self.actions = []
+        self.next_states = []
+        self.rewards = []
+        self.dones = []
+        self.action_log_probs = []
+        if not self.silent:
+            print("Updating finished!")
         return
+
+    def ppo_epoch(self):
+        indices = list(range(len(self.states)))
+        returns = self.compute_returns()
+        while len(indices) >= self.batch_size:
+            # Sample a minibatch
+            batch_indices = np.random.choice(indices, self.batch_size,
+                    replace=False)
+
+            # Do the update
+            self.ppo_update(self.states[batch_indices], self.actions[batch_indices],
+                self.rewards[batch_indices], self.next_states[batch_indices],
+                self.dones[batch_indices], self.action_log_probs[batch_indices],
+                returns[batch_indices])
+
+            # Drop the batch indices
+            indices = [i for i in indices if i not in batch_indices]
+
+    def ppo_update(self, states, actions, rewards, next_states, dones, old_log_probs, targets):
+        action_dists, values = self.policy(states)
+        values = values.squeeze()
+        new_action_probs = action_dists.log_prob(actions)
+        ratio = torch.exp(new_action_probs - old_log_probs)
+        clipped_ratio = torch.clamp(ratio, 1-self.clip, 1+self.clip)
+
+        advantages = targets - values
+        advantages -= advantages.mean()
+        advantages /= advantages.std()+1e-8
+        advantages = advantages.detach()
+        policy_objective = -torch.min(ratio*advantages, clipped_ratio*advantages)
+
+        value_loss = F.smooth_l1_loss(values, targets, reduction="mean")
+
+        policy_objective = policy_objective.mean()
+        entropy = action_dists.entropy().mean()
+        loss = policy_objective + 0.5*value_loss - 0.01*entropy
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
     def get_action(self, observation, evaluation=False):
         x = torch.from_numpy(observation).float().to(self.train_device)
@@ -125,7 +147,6 @@ class PPOAgent(BaseAgent):
         update_info = {'episode_length': episode_length,
                     'ep_reward': reward_sum}
         return update_info
-
 
 
     def train(self):
