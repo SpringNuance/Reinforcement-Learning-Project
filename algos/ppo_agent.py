@@ -9,9 +9,16 @@ import time
 
 class PPOAgent(BaseAgent):
     def __init__(self, config=None):
+        try:
+            if config['seed'] is not None:
+                print("Setting seed to", config['seed'])
+                torch.manual_seed(config['seed'])
+                np.random.seed(config['seed'])
+        except:
+            pass
         super(PPOAgent, self).__init__(config)
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
-
+        self.seed = self.cfg.seed
         self.state_dim = self.observation_space_dim
         self.action_dim = self.action_space_dim
         self.max_action = self.cfg.max_action
@@ -121,18 +128,27 @@ class PPOAgent(BaseAgent):
         x = torch.from_numpy(observation).float().to(self.train_device)
         action_dist, _ = self.policy.forward(x)
         if evaluation:
-            action = action_dist.probs.argmax()
+            # Use the mean of the distribution as the action during evaluation
+            # mean is the most likely action in Gaussian distribution
+            action = action_dist.mean
+            
+            action = action.detach()
         else:
+            # Sample an action from the distribution during training
             action = action_dist.sample()
+        #print("Returned by Policy", action)
+        # aprob = action_dist.log_prob(action).sum(dim=-1).squeeze()
         aprob = action_dist.log_prob(action)
         #print(type(action))
         #print(action)
+        # action = self.max_action * torch.tanh(action)
         action = action.clamp(-self.max_action, self.max_action)
+        
         # action = action.item()
-        action = action.flatten()
-        #print(action)
-        #print(type(action))
-        #print(action.shape)
+        #print("Processed", action)
+        # print(action)
+        # print(type(action))
+        # print(action.shape)
         return action, aprob
 
     def train_iteration(self,ratio_of_episodes):
@@ -141,11 +157,12 @@ class PPOAgent(BaseAgent):
         done = False
 
         # Reset the environment and observe the initial state
-        observation, _  = self.env.reset()
+        observation, _  = self.env.reset(seed=self.seed)
 
         while not done and episode_length < self.cfg.max_episode_steps:
             # Get action from the agent
             action, action_log_prob = self.get_action(observation)
+            action = action.flatten()
             previous_observation = observation.copy()
 
             # Perform the action on the environment, get new state and reward
@@ -181,7 +198,7 @@ class PPOAgent(BaseAgent):
         start = time.perf_counter()
 
         for ep in range(self.cfg.train_episodes+1):
-            ratio_of_episodes = (self.cfg.train_episodes - ep) / self.cfg.train_episodes
+            ratio_of_episodes = (self.cfg.train_episodes - ep) / self.cfg.train_episodes + 1e-8
             train_info = self.train_iteration(ratio_of_episodes)
             train_info.update({'episodes': ep})
             total_step+=train_info['episode_length']
@@ -193,7 +210,10 @@ class PPOAgent(BaseAgent):
             if total_step%self.cfg.log_interval==0:
                 average_return=sum(run_episode_reward)/len(run_episode_reward)
                 if not self.cfg.silent:
-                    print(f"Episode {ep} Step {total_step} finished. Average episode return: {average_return} ({train_info['episode_length']} episode_length, {logstd} logstd)")
+                    # print(f"Episode {ep} Step {total_step} finished. Average episode return: {average_return} ({train_info['episode_length']} episode_length, {logstd} logstd)")
+                    print(f"Episode {ep} Step {total_step} finished. Average episode return: {average_return} ({train_info['episode_length']} episode_length)")
+                    # logstd is a torch tensor
+                    # print("logstd: ", logstd.detach().cpu().numpy(), " | std: ", np.exp(logstd.detach().cpu().numpy()))
 
                 if self.cfg.save_logging:
                     train_info.update({'average_return':average_return})

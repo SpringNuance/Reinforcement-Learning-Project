@@ -7,25 +7,50 @@ from torch.distributions import Categorical
 import  torch
 
 
+def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+    torch.nn.init.orthogonal_(layer.weight, std)
+    torch.nn.init.constant_(layer.bias, bias_const)
+    return layer
+
 class Policy(torch.nn.Module):
-    def __init__(self, state_space, action_space, max_action, hidden_size=32):
+    def __init__(self, state_space, action_space, max_action, hidden_size=64):
         super().__init__()
         self.state_space = state_space
         self.action_space = action_space
         self.max_action = max_action
 
-        self.fc1_actor = torch.nn.Linear(state_space, hidden_size)
-        self.fc2_actor = torch.nn.Linear(hidden_size, hidden_size)
-        self.fc3_actor = torch.nn.Linear(hidden_size, action_space)
+        self.fc1_actor = layer_init(torch.nn.Linear(state_space, hidden_size))
+        self.fc2_actor = layer_init(torch.nn.Linear(hidden_size, hidden_size))
+        self.fc3_actor = layer_init(torch.nn.Linear(hidden_size, action_space))
 
+        # self.actor = nn.Sequential(
+        #                 nn.Linear(state_space, hidden_size),
+        #                 nn.ReLU(),
+        #                 nn.Linear(hidden_size, hidden_size),
+        #                 nn.ReLU(),
+        #                 nn.Linear(hidden_size, action_space),
+        #                 nn.Tanh()
+        #             )
+        
         # Learnable log standard deviation
-        self.actor_logstd = nn.Parameter(torch.zeros(1, action_space))
+        # self.actor_logstd = nn.Parameter(torch.zeros(1, action_space))
 
-        self.fc1_critic = torch.nn.Linear(state_space, hidden_size)
-        self.fc2_critic = torch.nn.Linear(hidden_size, hidden_size)
-        self.fc3_critic = torch.nn.Linear(hidden_size, 1)
+        # Fixed log standard deviation, not a learnable parameter
+        self.actor_logstd = torch.full((1, action_space), fill_value=0)
 
-        self.init_weights()
+        self.fc1_critic = layer_init(torch.nn.Linear(state_space, hidden_size))
+        self.fc2_critic = layer_init(torch.nn.Linear(hidden_size, hidden_size))
+        self.fc3_critic = layer_init(torch.nn.Linear(hidden_size, 1))
+
+        # self.critic = nn.Sequential(
+        #                 nn.Linear(state_space, hidden_size),
+        #                 nn.ReLU(),
+        #                 nn.Linear(hidden_size, hidden_size),
+        #                 nn.ReLU(),
+        #                 nn.Linear(hidden_size, 1)
+        #             )
+        
+        # self.init_weights()
 
     def init_weights(self):
         for m in self.modules():
@@ -35,12 +60,18 @@ class Policy(torch.nn.Module):
 
     def forward(self, x):
         x_actor = self.fc1_actor(x)
-        x_actor = F.relu(x_actor)
+        x_actor = F.tanh(x_actor)
         x_actor = self.fc2_actor(x_actor)
-        x_actor = F.relu(x_actor)
+        x_actor = F.tanh(x_actor)
         x_actor = self.fc3_actor(x_actor)
+        x_actor = F.tanh(x_actor)
 
-        action_mean = self.max_action * torch.tanh(x_actor)
+        #print(x_actor.shape)
+        #print(x_actor)
+
+        # action_mean = self.max_action * self.actor(x)
+        action_mean = self.max_action * x_actor
+        # action_mean = x_actor
         #print(action_mean.shape)
         # Standard deviation from logstd parameter
         # action_logstd = self.actor_logstd.expand_as(action_mean)
@@ -52,10 +83,12 @@ class Policy(torch.nn.Module):
         action_dist = Independent(action_dist, 1)
 
         x_critic = self.fc1_critic(x)
-        x_critic = F.relu(x_critic)
+        x_critic = F.tanh(x_critic)
         x_critic = self.fc2_critic(x_critic)
-        x_critic = F.relu(x_critic)
+        x_critic = F.tanh(x_critic)
         x_critic = self.fc3_critic(x_critic)
+
+        # x_critic = self.critic(x)
 
         return action_dist, x_critic
 
@@ -64,8 +97,7 @@ class Policy(torch.nn.Module):
         Adjusts the log standard deviation of the policy's action distribution.
         A higher ratio means more exploration, while a lower ratio means more exploitation.
         """
-        new_logstd = torch.full_like(self.actor_logstd, np.log(ratio_of_episodes))
-        self.actor_logstd.data.copy_(new_logstd)
+        self.actor_logstd = torch.full((1, self.action_space), fill_value=np.log(ratio_of_episodes))
 
 # # Layer initialization utility
 # def layer_init(layer, std=np.sqrt(2), bias_const=0.0):

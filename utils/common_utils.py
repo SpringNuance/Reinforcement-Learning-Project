@@ -120,7 +120,7 @@ def get_statistical_plots_data(path, seeds, env_name, algo_name):
 
         all_steps.append(steps)
         all_average_return.append(average_return)
-
+    #print("all average return", all_average_return)
      # Calculate mean and std across different runs
     mean_average_return = np.mean(all_average_return, axis=0)
     std_average_return = np.std(all_average_return, axis=0)
@@ -132,6 +132,9 @@ def plot_algorithm_training(path, seeds, env_name, algo_name):
 
      # Calculate mean and std across different runs
     steps, mean_average_return, std_average_return = get_statistical_plots_data(path, seeds, env_name, algo_name)
+    # print('steps', steps)
+    # print('mean_average_return', mean_average_return)
+    # print('std_average_return', std_average_return)
 
     
     plt.figure(figsize=(6, 4))
@@ -147,7 +150,9 @@ def plot_algorithm_training(path, seeds, env_name, algo_name):
     plt.title(algo_name+'_'+env_name, fontweight='bold', fontsize=14)
     plt.gca().ticklabel_format(axis='x', style='sci', scilimits=(0, 0))
     plt.legend()
+    
     plt.savefig(path / f'figure_statistical_{env_name}.pdf')
+ 
     return steps, mean_average_return, std_average_return
 
 
