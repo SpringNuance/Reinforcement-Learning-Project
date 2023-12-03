@@ -22,21 +22,21 @@ class DDPGAgent(BaseAgent):
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
         # self.device = "mps"
         self.name = 'ddpg'
-        self.state_dim = self.observation_space_dim
+        state_dim = self.observation_space_dim
         self.action_dim = self.action_space_dim
         self.max_action = self.cfg.max_action
         self.lr=self.cfg.lr
 
-        self.pi = Policy(self.state_dim, self.action_dim, self.max_action).to(self.device)
+        self.pi = Policy(state_dim, self.action_dim, self.max_action).to(self.device)
 
         self.pi_target = copy.deepcopy(self.pi)
         self.pi_optim = torch.optim.Adam(self.pi.parameters(), lr=float(self.lr))
 
-        self.q = Critic(self.state_dim, self.action_dim).to(self.device)
+        self.q = Critic(state_dim, self.action_dim).to(self.device)
         self.q_target = copy.deepcopy(self.q)
         self.q_optim = torch.optim.Adam(self.q.parameters(), lr=float(self.lr))
 
-        self.buffer = ReplayBuffer(state_shape=[self.state_dim], action_dim=self.action_dim, max_size=int(float(self.cfg.buffer_size)))
+        self.buffer = ReplayBuffer(state_shape=[state_dim], action_dim=self.action_dim, max_size=int(float(self.cfg.buffer_size)))
         
         self.batch_size = self.cfg.batch_size
         self.gamma = self.cfg.gamma
@@ -146,18 +146,11 @@ class DDPGAgent(BaseAgent):
         reward_sum, timesteps, done = 0, 0, False
         # Reset the environment and observe the initial state
         obs, _ = self.env.reset()
-        # Change obs to np.float32
-        #  env reset function seems to create float64 state space, 
-        # whereas the gym expects float32. By changing self.state to np.float32 it is possible to 
-        # get rid of some warnings and also speedup a bit the training
-        obs = obs.astype(np.float32)
-
         while not done:
             # Sample action from policy
             action, act_logprob =self.get_action(obs)
 
             # Perform the action on the environment, get new state and reward
-            
             next_obs, reward, done, _, _ = self.env.step(to_numpy(action))
 
             # Store action's outcome (so that the agent can improve its policy)        
@@ -173,7 +166,6 @@ class DDPGAgent(BaseAgent):
                 done = True
             # update observation
             obs = next_obs.copy()
-            obs = obs.astype(np.float32)
 
         # update the policy after one episode
         #s = time.perf_counter()
