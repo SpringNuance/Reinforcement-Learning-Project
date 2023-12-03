@@ -129,13 +129,14 @@ class DDPGAgent(BaseAgent):
             # if evaluation equals False, add normal noise to the action, where the std of the noise is expl_noise
             # Hint: Make sure the returned action's shape is correct.
             action = self.pi_target(x) # (batch_size, action_dim)
+            # print("Returned by Policy", action)
             if evaluation == False:
                 noises = torch.normal(mean=0, std=expl_noise, size=action.size()).to(self.device)
                 action = action + noises
                 action = action.clamp(-self.max_action, self.max_action)
 
             ########## Your code ends here. ##########
-
+        # print("Processed", action)
         return action, {} # just return a positional value
 
         
