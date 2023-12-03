@@ -84,23 +84,6 @@ class PPOAgent(BaseAgent):
             # Drop the batch indices
             indices = [i for i in indices if i not in batch_indices]
 
-    def compute_returns(self):
-        returns = []
-        with torch.no_grad():
-            _, values = self.policy(self.states)
-            _, next_values = self.policy(self.next_states)
-            values = values.squeeze()
-            next_values = next_values.squeeze()
-        gaes = torch.zeros(1)
-        timesteps = len(self.rewards)
-        for t in range(timesteps-1, -1, -1):
-            deltas = self.rewards[t] + self.gamma * next_values[t] *\
-                     (1-self.dones[t]) - values[t]
-            gaes = deltas + self.gamma*self.tau*(1-self.dones[t])*gaes
-            returns.append(gaes + values[t])
-
-        return torch.Tensor(list(reversed(returns)))
-    
     def ppo_update(self, states, actions, rewards, next_states, dones, old_log_probs, targets):
         action_dists, values = self.policy(states)
         values = values.squeeze()
@@ -123,9 +106,32 @@ class PPOAgent(BaseAgent):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+        
+    def compute_returns(self):
+        returns = []
+        with torch.no_grad():
+            _, values = self.policy(self.states)
+            _, next_values = self.policy(self.next_states)
+            values = values.squeeze()
+            next_values = next_values.squeeze()
+        gaes = torch.zeros(1)
+        timesteps = len(self.rewards)
+        for t in range(timesteps-1, -1, -1):
+            deltas = self.rewards[t] + self.gamma * next_values[t] *\
+                     (1-self.dones[t]) - values[t]
+            gaes = deltas + self.gamma*self.tau*(1-self.dones[t])*gaes
+            returns.append(gaes + values[t])
+
+        return torch.Tensor(list(reversed(returns)))
+    
+
 
     def get_action(self, observation, evaluation=False):
-        x = torch.from_numpy(observation).float().to(self.train_device)
+        if observation.ndim == 1: observation = observation[None] # add the batch dimension
+        try:
+            x = torch.from_numpy(observation).float().to(self.device)
+        except:
+            x = observation
         action_dist, _ = self.policy.forward(x)
         if evaluation:
             # Use the mean of the distribution as the action during evaluation
@@ -136,19 +142,20 @@ class PPOAgent(BaseAgent):
         else:
             # Sample an action from the distribution during training
             action = action_dist.sample()
-        #print("Returned by Policy", action)
+        # print("Returned by Policy", action)
         # aprob = action_dist.log_prob(action).sum(dim=-1).squeeze()
-        aprob = action_dist.log_prob(action)
+        
         #print(type(action))
         #print(action)
-        # action = self.max_action * torch.tanh(action)
-        action = action.clamp(-self.max_action, self.max_action)
         
+        # action = self.max_action * torch.tanh(action)
+        # action = action.clamp(-self.max_action, self.max_action)
+        aprob = action_dist.log_prob(action)
         # action = action.item()
-        #print("Processed", action)
-        # print(action)
-        # print(type(action))
-        # print(action.shape)
+        print("Processed", action)
+        print(action)
+        print(type(action))
+        print(action.shape)
         return action, aprob
 
     def train_iteration(self,ratio_of_episodes):
@@ -182,7 +189,8 @@ class PPOAgent(BaseAgent):
                 num_updates += 1
 
                 # Update policy randomness
-                self.policy.set_logstd_ratio(ratio_of_episodes)
+                # self.policy.set_logstd_ratio( 3.912 * ratio_of_episodes - 4.605)
+                self.policy.set_logstd_ratio( 4.605 * ratio_of_episodes - 4.605)
 
         # Return stats of training
         update_info = {'episode_length': episode_length,
@@ -213,7 +221,7 @@ class PPOAgent(BaseAgent):
                     # print(f"Episode {ep} Step {total_step} finished. Average episode return: {average_return} ({train_info['episode_length']} episode_length, {logstd} logstd)")
                     print(f"Episode {ep} Step {total_step} finished. Average episode return: {average_return} ({train_info['episode_length']} episode_length)")
                     # logstd is a torch tensor
-                    # print("logstd: ", logstd.detach().cpu().numpy(), " | std: ", np.exp(logstd.detach().cpu().numpy()))
+                    print("logstd: ", logstd.detach().cpu().numpy(), " | std: ", np.exp(logstd.detach().cpu().numpy()))
 
                 if self.cfg.save_logging:
                     train_info.update({'average_return':average_return})

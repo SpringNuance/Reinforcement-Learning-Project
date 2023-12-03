@@ -60,32 +60,32 @@ class Policy(torch.nn.Module):
 
     def forward(self, x):
         x_actor = self.fc1_actor(x)
-        x_actor = F.tanh(x_actor)
+        x_actor = F.relu(x_actor)
         x_actor = self.fc2_actor(x_actor)
-        x_actor = F.tanh(x_actor)
+        x_actor = F.relu(x_actor)
         x_actor = self.fc3_actor(x_actor)
-        x_actor = F.tanh(x_actor)
+        # x_actor = F.tanh(x_actor)
 
-        #print(x_actor.shape)
-        #print(x_actor)
+        # print(x_actor.shape)
+        # print(x_actor)
 
-        # action_mean = self.max_action * self.actor(x)
-        action_mean = self.max_action * x_actor
+        action_mean = self.max_action * F.tanh(x_actor)
+        # action_mean = self.max_action * x_actor
         # action_mean = x_actor
         #print(action_mean.shape)
         # Standard deviation from logstd parameter
-        # action_logstd = self.actor_logstd.expand_as(action_mean)
+        #action_logstd = self.actor_logstd.expand_as(action_mean)
         action_std = torch.exp(self.actor_logstd)
-
+        # action_logstd = self.actor_logstd.expand_as(action_mean)
         # Parameterize the normal distribution
         action_dist = Normal(action_mean, action_std)
         # Treat each action dimension as independent
         action_dist = Independent(action_dist, 1)
 
         x_critic = self.fc1_critic(x)
-        x_critic = F.tanh(x_critic)
+        x_critic = F.relu(x_critic)
         x_critic = self.fc2_critic(x_critic)
-        x_critic = F.tanh(x_critic)
+        x_critic = F.relu(x_critic)
         x_critic = self.fc3_critic(x_critic)
 
         # x_critic = self.critic(x)
@@ -97,7 +97,7 @@ class Policy(torch.nn.Module):
         Adjusts the log standard deviation of the policy's action distribution.
         A higher ratio means more exploration, while a lower ratio means more exploitation.
         """
-        self.actor_logstd = torch.full((1, self.action_space), fill_value=np.log(ratio_of_episodes))
+        self.actor_logstd = torch.full((1, self.action_space), fill_value=ratio_of_episodes)
 
 # # Layer initialization utility
 # def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -220,6 +220,9 @@ class Policy(torch.nn.Module):
 #         x_critic = F.relu(x_critic)
 #         x_critic = self.fc3_critic(x_critic)
 #         return x_critic
+
+
+
 
 
 
