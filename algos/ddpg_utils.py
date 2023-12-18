@@ -83,7 +83,7 @@ class PotentialFunction(nn.Module):
     def forward(self, state):
         """
             - state: agent state [batch_size, state_dim]
-            A state \( s \) is defined as:
+            A state  s  is defined as:
 
         s = [(xRobot, yRobot), (xSand, ySand)1, (xSand, ySand)2, ..., (xSand, ySand)N, (xNoSand, yNoSand)1, (xNoSand, yNoSand)2, ..., (xNoSand, yNoSand)M)]
 
@@ -103,7 +103,8 @@ class PotentialFunction(nn.Module):
         
         avg_distance_to_nosand = torch.mean(distance_to_nosand, dim=1)                 # shape [batch_size, 1]
         
-        potential_value = avg_distance_to_nosand/avg_distance_to_sand                # shape [batch_size, 1]
+        potential_value = (avg_distance_to_nosand - avg_distance_to_sand)/self.diagonal               # shape [batch_size, 1]
+        # potential_value = avg_distance_to_nosand/avg_distance_to_sand                # shape [batch_size, 1]
         return potential_value
 
 class ReplayBuffer(object):

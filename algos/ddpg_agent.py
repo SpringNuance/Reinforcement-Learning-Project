@@ -149,7 +149,7 @@ class DDPGAgent(BaseAgent):
         while not done:
             # Sample action from policy
             action, act_logprob =self.get_action(obs)
-
+            
             # Perform the action on the environment, get new state and reward
             next_obs, reward, done, _, _ = self.env.step(to_numpy(action))
 

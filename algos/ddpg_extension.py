@@ -21,7 +21,7 @@ class DDPGExtension(DDPGAgent):
                 np.random.seed(config["seed"])
         except:
             pass
-
+        print('Using DDPGExtension with TD3')
         super(DDPGAgent, self).__init__(config)
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
         # self.device = "mps"
@@ -142,6 +142,15 @@ class DDPGExtension(DDPGAgent):
 
         if self.buffer_ptr < self.random_transition and evaluation==False: # collect random trajectories for better exploration.
             action = torch.rand(self.action_dim)
+            
+            # action = self.pi(x) # (batch_size, action_dim)
+            # # Add noise into the action
+            # expl_noise = 0.3 # the stddev of the expl_noise if not evaluation
+            # noises = torch.normal(mean=0, std=expl_noise, size=action.size()).to(self.device)
+            # action = action + noises
+
+            # # action = action + ou_noise
+            # action = action.clamp(-self.max_action, self.max_action)
         else:
             expl_noise = 0.3 # the stddev of the expl_noise if not evaluation
             # ou_noise = torch.tensor(self.ou_process.sample()).to(self.device)
