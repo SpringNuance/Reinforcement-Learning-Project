@@ -202,7 +202,7 @@ class PPOAgent(BaseAgent):
 
                 # linear scale (0.7 - 0.3)
                 start = 0.7
-                end = 0.53
+                end = 0.54
 
                 self.policy.set_std(end + (start - end) * ratio_of_episodes)
                 
