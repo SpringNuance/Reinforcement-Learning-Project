@@ -54,15 +54,23 @@ class Policy(torch.nn.Module):
         x_critic = F.relu(x_critic)
         x_critic = self.fc3_critic(x_critic)
 
-        # x_critic = self.critic(x)
-
         return action_dist, x_critic
 
-    def set_logstd_ratio(self, ratio_of_episodes):
+    def set_logstd(self, logstd):
         """
         Adjusts the log standard deviation of the policy's action distribution.
-        A higher ratio means more exploration, while a lower ratio means more exploitation.
+        A higher logstd means more exploration, while a lower logstd means more exploitation.
         """
-        self.actor_logstd = torch.full((1, self.action_space), fill_value=ratio_of_episodes)
+        # Create a diagonal matrix with the same batch size as the input
+        # self.actor_logstd = torch.full(torch.full((self.action_space,), fill_value=set_logstd))
+        self.actor_logstd = torch.full((1, self.action_space), fill_value=logstd)
+ 
+    def set_std(self, std):
+        """
+        Adjusts the standard deviation of the policy's action distribution.
+        """
+        # Create a diagonal matrix with the same batch size as the input
+        # self.actor_logstd = torch.full(torch.full((self.action_space,), fill_value=set_logstd))
+        self.actor_logstd = torch.full((1, self.action_space), fill_value=np.log(std))
 
 

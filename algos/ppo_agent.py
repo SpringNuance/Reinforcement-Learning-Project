@@ -9,13 +9,13 @@ import time
 
 class PPOAgent(BaseAgent):
     def __init__(self, config=None):
-        try:
-            if config['seed'] is not None:
-                print("Setting seed to", config['seed'])
-                torch.manual_seed(config['seed'])
-                np.random.seed(config['seed'])
-        except:
-            pass
+        # try:
+        #     if config['seed'] is not None:
+        #         print("Setting seed to", config['seed'])
+        #         torch.manual_seed(config['seed'])
+        #         np.random.seed(config['seed'])
+        # except:
+        #     pass
         super(PPOAgent, self).__init__(config)
         self.device = self.cfg.device  # ""cuda" if torch.cuda.is_available() else "cpu"
         self.seed = self.cfg.seed
@@ -152,10 +152,10 @@ class PPOAgent(BaseAgent):
         # action = action.clamp(-self.max_action, self.max_action)
         aprob = action_dist.log_prob(action)
         # action = action.item()
-        print("Processed", action)
-        print(action)
-        print(type(action))
-        print(action.shape)
+        #print("Processed", action)
+        #print(action)
+        #print(type(action))
+        #print(action.shape)
         return action, aprob
 
     def train_iteration(self,ratio_of_episodes):
@@ -164,7 +164,8 @@ class PPOAgent(BaseAgent):
         done = False
 
         # Reset the environment and observe the initial state
-        observation, _  = self.env.reset(seed=self.seed)
+        # observation, _  = self.env.reset(seed=self.seed)
+        observation, _  = self.env.reset()
 
         while not done and episode_length < self.cfg.max_episode_steps:
             # Get action from the agent
@@ -188,9 +189,23 @@ class PPOAgent(BaseAgent):
                 self.update_policy()
                 num_updates += 1
 
-                # Update policy randomness
-                # self.policy.set_logstd_ratio( 3.912 * ratio_of_episodes - 4.605)
-                self.policy.set_logstd_ratio( 4.605 * ratio_of_episodes - 4.605)
+                # ratio_of_episodes = (self.cfg.train_episodes - ep) / self.cfg.train_episodes
+                # which decreases linearly from 1 to 0
+                # formula: a * ratio + b
+                # ending std = b
+                # starting std = a + b 
+
+                # log scale (0.7 - 0.3)
+                # start = np.log(0.7)
+                # end = np.log(0.3)
+                # self.policy.set_logstd(end + (start - end) * ratio_of_episodes)
+
+                # linear scale (0.7 - 0.3)
+                start = 0.7
+                end = 0.53
+
+                self.policy.set_std(end + (start - end) * ratio_of_episodes)
+                
 
         # Return stats of training
         update_info = {'episode_length': episode_length,
